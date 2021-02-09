@@ -50,6 +50,7 @@ public class Peripheral extends BluetoothGattCallback {
     private boolean autoconnect = false;
     private boolean connected = false;
     private boolean connecting = false;
+    private int connectionRetryCount = 0;
     private ConcurrentLinkedQueue<BLECommand> commandQueue = new ConcurrentLinkedQueue<BLECommand>();
     private boolean bleProcessing;
 
@@ -133,6 +134,7 @@ public class Peripheral extends BluetoothGattCallback {
     // the peripheral disconnected
     // always call connectCallback.error to notify the app
     private void peripheralDisconnected() {
+        connectionRetryCount = 0;
         connected = false;
         connecting = false;
 
@@ -395,15 +397,22 @@ public class Peripheral extends BluetoothGattCallback {
 
         if (newState == BluetoothGatt.STATE_CONNECTED) {
             LOG.d(TAG, "onConnectionStateChange CONNECTED");
+            connectionRetryCount = 0;
             connected = true;
             connecting = false;
             gatt.discoverServices();
 
         } else {  // Disconnected
             LOG.d(TAG, "onConnectionStateChange DISCONNECTED");
-            connected = false;
-            peripheralDisconnected();
-
+            if (newState == BluetoothGatt.STATE_DISCONNECTED &&
+                connectionRetryCount <= 6 && connecting && connectCallback != null) {
+                LOG.d(TAG, "Connect retry: " + connectionRetryCount);
+                connectionRetryCount++;
+                gattConnect();
+            } else {
+                connected = false;
+                peripheralDisconnected();
+            }
         }
 
     }
